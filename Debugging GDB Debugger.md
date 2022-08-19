@@ -93,7 +93,7 @@ GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.1) 9.2 ...
 ```
 Load symbols from `test` executable:
 ```bash
-run ~/gdb-test/test # Ucitavamo simbole iz test izvrsnog programa
+(gdb) run ~/gdb-test/test # Load symbols from 'test' executable
 Starting program: /home/syrmia/bin/gdb/bin/gdb ~/gdb-vezba/test
 [Thread debugging using libthread_db enabled]
 [Detaching after vfork from child process 6043]
@@ -123,7 +123,7 @@ and let's put one breakpoint on the very start of our main function and run the 
 ```bash
 (gdb) b 3
 Breakpoint 1 at 0x1175: file test.c, line 4
-run
+(gdb) run
 Starting program: /home/syrmia/gdb-test/test 
 [Detaching after vfork from child process 15624]
 [Detaching after fork from child process 15625]
@@ -154,5 +154,149 @@ This means we are now in `gdb-release` on line `value_as_address` which is set o
 #14 0x000055555565ccd0 in main (argc=<optimized out>, argv=<optimized out>) at ../../gdb/gdb.c:32
 ```
 What we knew until now is that content of pointer is address. But, do we need to perform some operations (e.g. shift) on these bytes in order to get usable address for specific architecture?
-Answer is yes, as can be read in 'Pointers Are Not Always Adresses' chapter of [this](https://wwwcdf.pd.infn.it/localdoc/gdbint.pdf) document. That is purpose of `value_as_address` function.
+Answer is **yes**, as can be read in 'Pointers Are Not Always Adresses' chapter of [this](https://wwwcdf.pd.infn.it/localdoc/gdbint.pdf) document. That is purpose of `value_as_address` function. Continuing program execution:
+```bash
+(gdb) continue
+Continuing.
+
+Breakpoint 1, main () at test.c:4
+4      {
+```
+Only now is `test's` breakpoint hit. If we continue once more time, `test` program will regularly finish it's execution. Also, we see that `gdb-debug` instance stays active:
+```bash
+(gdb) c
+Continuing.
+'a' is at address '0x7fffffffdf3c'.
+'a' has value '5'
+[Inferior 1 (process 16797) exited normally]
+(gdb) show version
+GNU gdb (GDB) 13.0.50.20220815-git
+```
+
+ We found out that even if we don't access any pointer explicitly in `test` code, `value_as_address` in being called. The same function is invoked when we want to `print` some variable from interactive debugger, as we will show in the following example:
+```bash
+# Run gdb-debug using gdb-release
+(bash) /usr/bin/gdb $HOME/builds/gdb/bin/gdb
+
+# Make sure we are in gdb-release     
+(gdb) show version 
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.1) 9.2        
+
+# Put breakpoint in 'gdb-debug' exe on value_as_address function
+(gdb) b value_as_address          
+Breakpoint 1 at 0x5646c0: file ../../gdb/value.c, line 2757
+
+# Make sure we are still in gdb-release
+(gdb) show version  
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.1) 9.2 ...
+
+# Load symbols from 'test' executable in 'gdb-debug'
+(gdb) run ~/gdb-test/test               
+Starting program: /home/syrmia/bin/gdb/bin/gdb ~/gdb-vezba/test
+[Thread debugging using libthread_db enabled]
+[Detaching after vfork from child process 6043]
+[New Thread 0x7ffff49fd700 (LWP 6044)] ...
+GNU gdb (GDB) 13.0.50.20220815-git
+
+# Display code that is about to be run
+(gdb) list                          
+1	#include <stdio.h>
+2	
+3	int main()
+4	{
+5		int a = 5;
+6		int *pa = &a;
+7		printf("'a' is at address '%p'.\n'a' has value '%d'\n", pa, *pa);
+8	
+9		return 0;
+10	}
+
+# Put 3 breakpoints in 'test' executable
+(gdb) b 3                                    
+Breakpoint 1 at 0x1175: file test.c, line 4.
+(gdb) b 7
+Breakpoint 2 at 0x1193: file test.c, line 7.
+(gdb) b 9
+Breakpoint 3 at 0x11b1: file test.c, line 9.
+
+# Make sure breakpoints are set
+(gdb) info b                                
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x0000000000001175 in main at test.c:4
+2       breakpoint     keep y   0x0000000000001193 in main at test.c:7
+3       breakpoint     keep y   0x00000000000011b1 in main at test.c:9
+
+# Start 'test'
+(gdb) run                                  
+Starting program: /home/syrmia/gdb-test/test 
+[Detaching after vfork from child process 17597]
+[Detaching after fork from child process 17598]
+[Detaching after fork from child process 17599]
+
+Thread 1 "gdb" hit Breakpoint 1, value_as_address (val=0x555556225a00) at ../../gdb/value.c:2757
+2757	{
+
+# Finish value_as_address function and continue execution until next breakpoint
+(gdb) c 
+Continuing.
+
+Breakpoint 1, main () at test.c:4
+4	{
+
+# Continue to next breakpoint
+(gdb) c 
+Continuing.
+
+Breakpoint 2, main () at test.c:7
+7		printf("'a' is at address '%p'.\n'a' has value '%d'\n", pa, *pa); 
+
+# Recall 'test' source code to see if 'pa' pointer is initialized
+(gdb) list -5  
+1	#include <stdio.h>
+2	
+3	int main()
+4	{
+5		int a = 5;
+6		int *pa = &a;
+7		printf("'a' is at address '%p'.\n'a' has value '%d'\n", pa, *pa);
+8	
+9		return 0;
+10	}
+
+# Print pointer 'pa'. Note that 'value_as_address' will be hit 3 times
+(gdb) print pa  
+
+Thread 1 "gdb" hit Breakpoint 1, value_as_address (val=0x555556225a00) at ../../gdb/value.c:2757
+2757	{
+(gdb) c
+Continuing.
+
+Thread 1 "gdb" hit Breakpoint 1, value_as_address (val=0x555556225a00) at ../../gdb/value.c:2757
+2757	{
+(gdb) c
+Continuing.
+
+Thread 1 "gdb" hit Breakpoint 1, value_as_address (val=0x5555561f6c10) at ../../gdb/value.c:2757
+2757	{
+(gdb) c
+Continuing.
+
+# Now 'pa' prints its content
+$1 = (int *) 0x7fffffffdf3c   
+
+# Continue 'test' execution
+(gdb) c    
+Continuing.
+'a' is at address '0x7fffffffdf3c'.
+'a' has value '5'
+
+Breakpoint 3, main () at test.c:9
+9		return 0;
+
+# Finish 'test'
+(gdb) c  
+Continuing.
+[Inferior 1 (process 17597) exited normally]
+
+```
 
