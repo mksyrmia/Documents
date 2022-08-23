@@ -34,7 +34,7 @@ If build succeeds, `0` should be printed as the last line in terminal. If it fai
 ```bash
 grep -C4 -i 'error' build.log
 ```
-The most common error is missing dependencies in your system. After you install them, retry build process:
+The most common error is missing dependencies in system. After you install them, retry build process:
 ```bash
 cd $HOME
 rm -rf binutils-gdb
@@ -75,7 +75,7 @@ Let's open `gdb-debug` using `gdb-release`:
 ```bash
 /usr/bin/gdb $HOME/builds/gdb/bin/gdb
 ```
-Using `show version` we can find out whether we are in `gdb-release` or `gdb-debug` debugger:
+By using `show version` we can find out whether we are in `gdb-release` or `gdb-debug` debugger:
 ```bash
 (gdb) show version
 GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.1) 9.2
@@ -100,7 +100,7 @@ Starting program: /home/syrmia/bin/gdb/bin/gdb ~/gdb-test/test
 [New Thread 0x7ffff49fd700 (LWP 6044)] ...
 GNU gdb (GDB) 13.0.50.20220815-git
 ```
-Note that `gdb 13.0.50` i.e. `gdb-debug` took terminal control. That's because `run` command 'starts debugged program'. Here, since `gdb-release` opened `gdb-debug`, `gdb-debug` is `debugged program`. When we say `run [args]`, `gdb-debug` is being run. Let's find out where are breakpoints placed:
+Note that `gdb 13.0.50` i.e. `gdb-debug` took control of the terminal. That's because `run` command 'starts debugged program'. Here, since `gdb-release` opened `gdb-debug`, `gdb-debug` is `debugged program`. When we say `run [args]`, `gdb-debug` is being run. Let's find out where are breakpoints placed:
 ```bash
 (gdb) info b
 No breakpoints or watchpoints.
@@ -173,7 +173,7 @@ Continuing.
 GNU gdb (GDB) 13.0.50.20220815-git
 ```
 
- We found out that even if we don't access any pointer explicitly in `test` code, `value_as_address` in being called. The same function is invoked when we want to `print` some variable from interactive debugger, as we will show in the following example:
+ We found out that even if we don't access any pointer explicitly in `test` code, `value_as_address` in being called. The same function is invoked when we want to `print` some variable from interactive debugger, as the following example describes:
 ```bash
 # Run gdb-debug using gdb-release
 (bash) /usr/bin/gdb $HOME/builds/gdb/bin/gdb
@@ -301,7 +301,10 @@ Continuing.
 ```
 
 ## Function *value_as_address(struct value \*value)* 
-The following example tracks flow of `value_as_address` function:
+The following examples examine `value_as_address` function.
+After each example is some conclusion.
+
+### Example 1
 ```bash
 (gdb) run
 Starting program: /home/syrmia/gdb-test/test 
@@ -354,7 +357,7 @@ Breakpoint 1, main () at test.c:8
 8		printf("'a' is at address '%p'.\n'a' has value '%d'\n", pa, *pa);
 
 # 'a' and 'pa' are initialized. Let's check content of 'a' variable
-# Note that 'value_as_address' will be hit 3 times while providing the same
+# Note that 'value_as_address' will be hit 3 times with the same
 # $val parameter 2 times and getting different return value each time
 (gdb) print a
 Thread 1 "gdb" hit Breakpoint 1, value_as_address (val=0x55555622d630) at ../../gdb/value.c:2757
@@ -470,7 +473,12 @@ Continuing.
 [Inferior 1 (process 21164) exited normally]
 
 ```
-Run program one more time with more *backtrace* calls:
+We saw that:
+* `value_as_address` breakpoint was hit before entering `main` function of `test` program.
+* `value_as_address` is called whenever we want to fetch content of some variable (`a`,`pa`). Furthermore, if we call 'print `$some_var`' for the first time, `value_as_address` is called three times before content is read. Every next `print $some_var` call invokes `value_as_address` just one time.
+
+### Example 2
+Run program one more time with focus on *backtrace*:
 ```bash
 GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.1) 9.2
 Reading symbols from /home/syrmia/builds/gdb/bin/gdb...
@@ -491,6 +499,9 @@ Reading symbols from gdb-test/test...
 8		printf("'a' is at address '%p'.\n'a' has value '%d'\n", pa, *pa);
 9	
 10		return 0;
+
+
+# Put breakpoints on 'main' and 'printf()' lines and then run program
 (gdb) b main
 Breakpoint 1 at 0x1175: file test.c, line 4.
 (gdb) b 8
@@ -502,7 +513,8 @@ Starting program: /home/syrmia/gdb-test/test
 Thread 1 "gdb" hit Breakpoint 1, value_as_address (val=0x555556228750) at ../../gdb/value.c:2757
 2757	{
 
-# Stack trace before reaching main function of 'test'
+# We hit 'value_as_address' breakpoint before entering main function of 'test'
+# Display stack trace before reaching main function of 'test' then continue execution
 (gdb) bt
 #0  value_as_address (val=0x555556228750) at ../../gdb/value.c:2757
 #1  0x00005555559c7cc6 in svr4_handle_solib_event () at ../../gdb/solib-svr4.c:1838
@@ -799,3 +811,342 @@ Continuing.
 'a' has value '5'
 [Inferior 1 (process 26556) exited normally] 
 ```
+Note that:
+* Before reaching  `value_as_address`, a certain set of events occur (`fetch_inferior_event`, `handle_inferior_event`, `handle_solib_event`, `svr4_handle_solib_event` etc). 
+* Command `print $some_var` causes `dwarf_*`, `drarf2_*` (and eventually `read_addr_from_reg` and `address_from_register` if `print` is being called for the first time) function calls.
+* First `print $some_var` (`print a` in the example) call caused three `value_as_address` breakpoint hits. There were `read_addr_from_reg` and `address_from_register` stack frames present only in the first two backtraces, but not in the third, when `value` parameter for `value_as_address` function changed from `0x555556226c50` to `0x555556247320`.
+* Every latter call of `print $some_var` command doesn't produce `read_addr_from_reg`/`address_from_register` stack frames and doesn't hit `value_as_address` breakpoint three but just one time.
+
+### Example 3
+This example runs `value_as_address` line by line:
+```bash
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.1) 9.2
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from /home/syrmia/builds/gdb/bin/gdb...
+
+(gdb) b value_as_address
+Breakpoint 1 at 0x5646c0: file ../../gdb/value.c, line 2757.
+
+(gdb) run gdb-test/test
+Starting program: /home/syrmia/builds/gdb/bin/gdb gdb-test/test
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[Detaching after vfork from child process 8771]
+[New Thread 0x7ffff49fc700 (LWP 8772)] ...
+GNU gdb (GDB) 13.0.50.20220815-git
+Copyright (C) 2022 Free Software Foundation, Inc ...
+Reading symbols from gdb-test/test...
+
+(gdb) list
+1	#include <stdio.h>
+2	
+3	int main()
+4	{
+5		printf("Address of main is %p\n", main);
+6		int a = 5;
+7		int *pa = &a;
+8		printf("'a' is at address '%p'.\n'a' has value '%d'\n", pa, *pa);
+9	
+10		return 0;
+
+(gdb) b main
+Breakpoint 1 at 0x1175: file test.c, line 4.
+
+(gdb) b 8
+Breakpoint 2 at 0x11ab: file test.c, line 8.
+
+(gdb) r
+Starting program: /home/syrmia/gdb-test/test 
+[Detaching after vfork from child process 8782]
+[Detaching after fork from child process 8783]
+[Detaching after fork from child process 8784]
+
+Thread 1 "gdb" hit Breakpoint 1, value_as_address (val=0x555556228770) at ../../gdb/value.c:2757
+2757	{
+
+(gdb) bt
+#0  value_as_address (val=0x555556228770) at ../../gdb/value.c:2757
+#1  0x00005555559c7cc6 in svr4_handle_solib_event () at ../../gdb/solib-svr4.c:1838
+#2  0x00005555559cd7f0 in handle_solib_event () at ../../gdb/solib.c:1338
+#3  0x00005555556f4865 in bpstat_stop_status (aspace=<optimized out>, 
+    bp_addr=bp_addr@entry=140737353955253, thread=thread@entry=0x555556174590, ws=..., 
+    stop_chain=stop_chain@entry=0x0) at ../../gdb/breakpoint.c:5558
+#4  0x000055555587faac in handle_signal_stop (ecs=0x7fffffffdd20) at ../../gdb/regcache.h:344
+#5  0x000055555588209c in handle_inferior_event (ecs=<optimized out>) at ../../gdb/infrun.c:5869
+#6  0x00005555558831fb in fetch_inferior_event () at ../../gdb/infrun.c:4233
+#7  0x0000555555bc19c6 in gdb_wait_for_event (block=block@entry=0) at ../../gdbsupport/event-loop.cc:670
+#8  0x0000555555bc1c86 in gdb_wait_for_event (block=0) at ../../gdbsupport/event-loop.cc:569
+#9  gdb_do_one_event () at ../../gdbsupport/event-loop.cc:210
+#10 0x00005555558c8b55 in start_event_loop () at ../../gdb/main.c:411
+#11 captured_command_loop () at ../../gdb/main.c:471
+#12 0x00005555558ca725 in captured_main (data=<optimized out>) at ../../gdb/main.c:1329
+#13 gdb_main (args=<optimized out>) at ../../gdb/main.c:1344
+#14 0x000055555565ccd0 in main (argc=<optimized out>, argv=<optimized out>) at ../../gdb/gdb.c:32
+
+(gdb) next
+2758	  struct gdbarch *gdbarch = value_type (val)->arch ();
+(gdb) 
+1027	    return this->main_type->code;
+(gdb) 
+2810	  val = coerce_array (val);
+(gdb) 
+2849	  if (!value_type (val)->is_pointer_or_reference ()
+(gdb) 
+2854	  return unpack_long (value_type (val), value_contents (val).data ());
+(gdb) 
+1100	  return value->type;
+(gdb) 
+unpack_long (type=0x555556372aa0, valaddr=0x555556231820 "`\341\377\367\377\177") at ../../gdb/value.c:2874
+2874	{
+
+(gdb) bt
+#0  unpack_long (type=0x555556372aa0, valaddr=0x555556231820 "`\341\377\367\377\177")
+    at ../../gdb/value.c:2874
+#1  0x00005555559c7cc6 in svr4_handle_solib_event () at ../../gdb/solib-svr4.c:1838
+#2  0x00005555559cd7f0 in handle_solib_event () at ../../gdb/solib.c:1338
+#3  0x00005555556f4865 in bpstat_stop_status (aspace=<optimized out>, 
+    bp_addr=bp_addr@entry=140737353955253, thread=thread@entry=0x555556174590, ws=..., 
+    stop_chain=stop_chain@entry=0x0) at ../../gdb/breakpoint.c:5558
+#4  0x000055555587faac in handle_signal_stop (ecs=0x7fffffffdd20) at ../../gdb/regcache.h:344
+#5  0x000055555588209c in handle_inferior_event (ecs=<optimized out>) at ../../gdb/infrun.c:5869
+#6  0x00005555558831fb in fetch_inferior_event () at ../../gdb/infrun.c:4233
+#7  0x0000555555bc19c6 in gdb_wait_for_event (block=block@entry=0) at ../../gdbsupport/event-loop.cc:670
+#8  0x0000555555bc1c86 in gdb_wait_for_event (block=0) at ../../gdbsupport/event-loop.cc:569
+#9  gdb_do_one_event () at ../../gdbsupport/event-loop.cc:210
+#10 0x00005555558c8b55 in start_event_loop () at ../../gdb/main.c:411
+#11 captured_command_loop () at ../../gdb/main.c:471
+#12 0x00005555558ca725 in captured_main (data=<optimized out>) at ../../gdb/main.c:1329
+#13 gdb_main (args=<optimized out>) at ../../gdb/main.c:1344
+#14 0x000055555565ccd0 in main (argc=<optimized out>, argv=<optimized out>) at ../../gdb/gdb.c:32
+
+(gdb) next
+2875	  if (is_fixed_point_type (type))
+(gdb) 
+2878	  enum bfd_endian byte_order = type_byte_order (type);
+(gdb) 
+2881	  int nosign = type->is_unsigned ();
+(gdb) 
+2883	  switch (code)
+(gdb) 
+2897		if (type->bit_size_differs_p ())
+(gdb) 
+2912		    if (nosign)
+(gdb) 
+2913		      result = extract_unsigned_integer (valaddr, len, byte_order);
+(gdb) 
+2917		if (code == TYPE_CODE_RANGE)
+(gdb) 
+svr4_handle_solib_event () at ../../gdb/solib-svr4.c:1839
+1839	    if (debug_base == 0)
+
+(gdb) bt
+#0  svr4_handle_solib_event () at ../../gdb/solib-svr4.c:1839
+#1  0x00005555559cd7f0 in handle_solib_event () at ../../gdb/solib.c:1338
+#2  0x00005555556f4865 in bpstat_stop_status (aspace=<optimized out>, 
+    bp_addr=bp_addr@entry=140737353955253, thread=thread@entry=0x555556174590, ws=..., 
+    stop_chain=stop_chain@entry=0x0) at ../../gdb/breakpoint.c:5558
+#3  0x000055555587faac in handle_signal_stop (ecs=0x7fffffffdd20) at ../../gdb/regcache.h:344
+#4  0x000055555588209c in handle_inferior_event (ecs=<optimized out>) at ../../gdb/infrun.c:5869
+#5  0x00005555558831fb in fetch_inferior_event () at ../../gdb/infrun.c:4233
+#6  0x0000555555bc19c6 in gdb_wait_for_event (block=block@entry=0) at ../../gdbsupport/event-loop.cc:670
+#7  0x0000555555bc1c86 in gdb_wait_for_event (block=0) at ../../gdbsupport/event-loop.cc:569
+#8  gdb_do_one_event () at ../../gdbsupport/event-loop.cc:210
+#9  0x00005555558c8b55 in start_event_loop () at ../../gdb/main.c:411
+#10 captured_command_loop () at ../../gdb/main.c:471
+#11 0x00005555558ca725 in captured_main (data=<optimized out>) at ../../gdb/main.c:1329
+#12 gdb_main (args=<optimized out>) at ../../gdb/main.c:1344
+#13 0x000055555565ccd0 in main (argc=<optimized out>, argv=<optimized out>) at ../../gdb/gdb.c:32
+
+(gdb) next
+1843	    info->debug_base = 0;
+(gdb) 
+1844	    if (locate_base (info) == 0)
+(gdb) 
+1823	      = inhibit_section_map_updates (current_program_space);
+(gdb) 
+1874	    if (action == UPDATE_OR_RELOAD)
+(gdb) 
+1823	      = inhibit_section_map_updates (current_program_space);
+(gdb) 
+1903	  if (action == FULL_RELOAD)
+(gdb) 
+1905	      if (!solist_update_full (info))
+(gdb) 
+1695	  return 1;
+(gdb) 
+handle_solib_event () at ../../gdb/solib.c:1340
+1340	  current_inferior ()->pspace->clear_solib_cache ();
+
+(gdb) bt
+#0  handle_solib_event () at ../../gdb/solib.c:1340
+#1  0x00005555556f4865 in bpstat_stop_status (aspace=<optimized out>, 
+    bp_addr=bp_addr@entry=140737353955253, thread=thread@entry=0x555556174590, ws=..., 
+    stop_chain=stop_chain@entry=0x0) at ../../gdb/breakpoint.c:5558
+#2  0x000055555587faac in handle_signal_stop (ecs=0x7fffffffdd20) at ../../gdb/regcache.h:344
+#3  0x000055555588209c in handle_inferior_event (ecs=<optimized out>) at ../../gdb/infrun.c:5869
+#4  0x00005555558831fb in fetch_inferior_event () at ../../gdb/infrun.c:4233
+#5  0x0000555555bc19c6 in gdb_wait_for_event (block=block@entry=0) at ../../gdbsupport/event-loop.cc:670
+#6  0x0000555555bc1c86 in gdb_wait_for_event (block=0) at ../../gdbsupport/event-loop.cc:569
+#7  gdb_do_one_event () at ../../gdbsupport/event-loop.cc:210
+#8  0x00005555558c8b55 in start_event_loop () at ../../gdb/main.c:411
+#9  captured_command_loop () at ../../gdb/main.c:471
+#10 0x00005555558ca725 in captured_main (data=<optimized out>) at ../../gdb/main.c:1329
+#11 gdb_main (args=<optimized out>) at ../../gdb/main.c:1344
+#12 0x000055555565ccd0 in main (argc=<optimized out>, argv=<optimized out>) at ../../gdb/gdb.c:32
+
+(gdb) next
+1345	  target_terminal::ours_for_output ();
+(gdb) 
+1346	  solib_add (NULL, 0, auto_solib_add);
+(gdb) 
+1347	  target_terminal::inferior ();
+(gdb) 
+target_terminal::inferior () at ../../gdb/target.c:940
+940	{
+(gdb) 
+941	  struct ui *ui = current_ui;
+(gdb) 
+945	  if (ui->prompt_state != PROMPT_BLOCKED)
+(gdb) 
+952	  if (ui != main_ui)
+(gdb) 
+958	  struct inferior *inf = current_inferior ();
+(gdb) 
+960	  if (inf->terminal_state != target_terminal_state::is_inferior)
+(gdb) 
+962	      current_inferior ()->top_target ()->terminal_inferior ();
+(gdb) 
+963	      inf->terminal_state = target_terminal_state::is_inferior;
+(gdb) 
+966	  m_terminal_state = target_terminal_state::is_inferior;
+(gdb) 
+970	  if (check_quit_flag ())
+(gdb) 
+bpstat_stop_status (aspace=<optimized out>, bp_addr=bp_addr@entry=140737353955253, 
+    thread=thread@entry=0x555556174590, ws=..., stop_chain=stop_chain@entry=0x0)
+    at ../../gdb/breakpoint.c:5559
+5559		  break;
+(gdb) 
+5569	  for (bs = bs_head; bs != NULL; bs = bs->next)
+(gdb) 
+5571	      if (!bs->stop)
+(gdb) 
+5574	      b = bs->breakpoint_at;
+(gdb) 
+5575	      b->check_status (bs);
+(gdb) 
+5576	      if (bs->stop)
+(gdb) 
+5608		bs->print_it = print_it_noop;
+(gdb) 
+5569	  for (bs = bs_head; bs != NULL; bs = bs->next)
+(gdb) 
+5616	  if (! bpstat_causes_stop (bs_head))
+(gdb) 
+5618	      if (!bs->stop
+(gdb) 
+5620		  && is_hardware_watchpoint (bs->breakpoint_at))
+(gdb) 
+5617	    for (bs = bs_head; bs != NULL; bs = bs->next)
+(gdb) 
+5628	  if (need_remove_insert)
+(gdb) 
+5630	  else if (removed_any)
+(gdb) 
+5633	  return bs_head;
+(gdb) 
+handle_signal_stop (ecs=0x7fffffffdd20) at ../../gdb/infrun.c:6406
+6406	  if (ecs->event_thread->stop_signal () == GDB_SIGNAL_TRAP
+(gdb) 
+423	    return m_suspend.stop_signal;
+
+(gdb) bt
+#0  handle_signal_stop (ecs=0x7fffffffdd20) at ../../gdb/gdbthread.h:423
+#1  0x000055555588209c in handle_inferior_event (ecs=<optimized out>) at ../../gdb/infrun.c:5869
+#2  0x00005555558831fb in fetch_inferior_event () at ../../gdb/infrun.c:4233
+#3  0x0000555555bc19c6 in gdb_wait_for_event (block=block@entry=0) at ../../gdbsupport/event-loop.cc:670
+#4  0x0000555555bc1c86 in gdb_wait_for_event (block=0) at ../../gdbsupport/event-loop.cc:569
+#5  gdb_do_one_event () at ../../gdbsupport/event-loop.cc:210
+#6  0x00005555558c8b55 in start_event_loop () at ../../gdb/main.c:411
+#7  captured_command_loop () at ../../gdb/main.c:471
+#8  0x00005555558ca725 in captured_main (data=<optimized out>) at ../../gdb/main.c:1329
+#9  gdb_main (args=<optimized out>) at ../../gdb/main.c:1344
+#10 0x000055555565ccd0 in main (argc=<optimized out>, argv=<optimized out>) at ../../gdb/gdb.c:32
+(gdb) 
+
+```
+We saw that `value_as_address` calls `unpack_long` which enters `if (code == TYPE_CODE_RANGE)` block and returns. `TYPE_CODE_RANGE` is 'integer within specified bounds' as specified in `gdbtypes.h` header file. After `value_as_address` i.e. `unpack_long` finishes, stack frame shrinks (`svr4_handle_solib_event` -> `handle_solib_event` etc).
+
+### Example 4
+We know that `value_as_address` gets `value` parameter. But, we also know that the same function is invoked even before reaching main. This example proves that `value` parameter isn't address of `_start` function which is entry point for executable.
+
+Source code of executable is saved to `no-main.c` file:
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+int my_fun()
+{
+	printf("Hello from my_fun!\n");
+	return 0;
+}
+
+int _start()
+{
+	printf("Address of _start is %p\n", _start);
+	printf("Address of my_fun is %p\n", my_fun);
+	int retcode = my_fun();
+	exit(retcode);
+}
+```
+
+and is compiled with `gcc -g -nostartfiles -o no-main no-main.c`.
+
+Here is debugger output:
+```bash
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.1) 9.2
+Reading symbols from /home/syrmia/builds/gdb/bin/gdb...
+(gdb) b value_as_address
+Breakpoint 1 at 0x5646c0: file ../../gdb/value.c, line 2757.
+(gdb) r no-main
+Starting program: /home/syrmia/builds/gdb/bin/gdb no-main
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[Detaching after vfork from child process 13156]
+[New Thread 0x7ffff49fc700 (LWP 13157)] ...
+GNU gdb (GDB) 13.0.50.20220815-git
+Reading symbols from no-main...
+(gdb) list 14
+9	
+10	int _start()
+11	{
+12		printf("Address of _start is %p\n", _start);
+13		printf("Address of my_fun is %p\n", my_fun);
+14		int retcode = my_fun();
+15		exit(retcode);
+16	}
+17
+(gdb) b _start
+Breakpoint 1 at 0x1097: file no-main.c, line 12.
+(gdb) r
+Starting program: /home/syrmia/gdb-test-no-main/no-main 
+[Detaching after vfork from child process 13166] ...
+
+Thread 1 "gdb" hit Breakpoint 1, value_as_address (val=0x55555622d1a0) at ../../gdb/value.c:2757
+2757	{
+(gdb) x 0x55555622d1a0
+0x55555622d1a0:	0x00000000
+(gdb) c
+Continuing.
+
+Breakpoint 1, _start () at no-main.c:12
+12		printf("Address of _start is %p\n", _start);
+(gdb) c
+Continuing.
+Address of _start is 0x55555555508b
+Address of my_fun is 0x555555555070
+Hello from my_fun!
+[Inferior 1 (process 13166) exited normally]
+```
+Since `value_as_address` breakpoint was hit even before `no-main` started (`_start` breakpoint), we can conclude that `gdb` performs some preparations before debugged program commences its execution. Note also that parameter `value` passed to `value_as_address` isn't adress of `_start` nor `my_fun` function.
