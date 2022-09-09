@@ -1024,7 +1024,8 @@ Note that:
 \item Before reaching  $value\_as\_address$, a certain set of event handlers are being called (\textit{fetch\_inferior\_event}, \textit{handle\_inferior\_event}, $handle\_solib\_event$, $svr4\_handle\_solib\_event$ etc). 
 \item Command \textit{print \$some\_var} causes \textit{dwarf\_*}, \textit{dwarf2\_*} (and eventually \textit{read\_addr\_from\_reg} and \textit{address\_from\_register} if $print$ is being called for the first time) function calls.
 \item First \textit{print \$some\_var} (\textit{print a} in the example) call caused three $value\_as\_address$ breakpoint hits. There were \textit{read\_addr\_from\_reg} and \textit{address\_from\_register} stack frames present only in the first two backtraces, but not in the third, when $value$ parameter for $value\_as\_address$ function changed from $0x555556226c50$ to $0x555556247320$.
-Every latter call of \textit{print \$some\_var} command doesn't produce \textit{read\_addr\_from\_reg} and \textit{address\_from\_register} stack frames and doesn't hit $value\_as\_address$ breakpoint three but just one time.
+Only then, stack frame of \textit{dwarf\_expr\_context::fetch\_result} has been created for the first time.
+Every latter call of \textit{print \$some\_var} command called \textit{dwarf\_expr\_context::fetch\_result} function and didn't produce \textit{read\_addr\_from\_reg} and \textit{address\_from\_register} stack frames and didn't hit $value\_as\_address$ breakpoint three but just one time.
 \end{itemize}
 
 \section *{Example 3}
@@ -1324,7 +1325,7 @@ handle_signal_stop (ecs=0x7fffffffdd20) at ../../gdb/infrun.c:6406
 
 
 \end{minted}
-We saw that $value\_as\_address$ calls $unpack\_long$ which enters $if (code == TYPE\_CODE\_RANGE)$ block and returns. $TYPE\_CODE\_RANGE$ is 'integer within specified bounds' as specified in $gdbtypes.h$ header file. After $value\_as\_address$ i.e. $unpack\_long$ finishes, stack frame shrinks ($svr4\_handle\_solib\_event --> handle\_solib\_event$ etc).
+We saw that $value\_as\_address$ calls $unpack\_long$ which enters \textit{if (code == TYPE\_CODE\_RANGE)} block and returns. $TYPE\_CODE\_RANGE$ is 'integer within specified bounds' as specified in $gdbtypes.h$ header file. After $value\_as\_address$ i.e. $unpack\_long$ finishes, stack frame shrinks \textit{svr4\_handle\_solib\_event $\rightarrow$ handle\_solib\_event} etc).
 
 \section *{Example 4}
 We know that $value\_as\_address$ gets $value$ parameter. But, we also know that the same function is invoked even before reaching main. There are certain preparations before $main$ function can execute its instructions and by default, entry point for executable is $\_start$ function. This example proves that $value$ parameter isn't address of $\_start$ function.
@@ -1402,7 +1403,31 @@ Hello from my_fun!
 Since $value\_as\_address$ breakpoint was hit even before \textit{no-main} executable started ($\_start$ breakpoint), we can conclude that $gdb$ performs some preparations before debugged program commences its execution. As we already said, parameter $value$ passed to $value\_as\_address$ isn't address of $\_start$ nor $my\_fun$ function.
 
 \chapter *{DWARF Functions in GDB}
-\section *{Technical terms}
+	Most common debugging formats are \textit{COFF}, \textit{STABS} and \textit{DWARF}, which will be in our focus. \textit{DWARF} is standardized debugging data format which uses data structure called \textbf{DIE}(Debugging Information Entry), noted as \textit{DW\_TAG} and organized in a tree structure.  Each \textit{DIE} has attributes which begin with \textit{DW\_AT} (\textit{DW\_AT\_name}, \textit{DW\_AT\_type}, \textit{DW\_AT\_declaration} etc.). All debug informations are divided into sections, of which most important are:
+	\begin{itemize}
+		\item \textbf{.debug\_line} - contains information about line numbers from source code
+		\item \textbf{.debug\_info} - most important section containing tree structure of debug informations. Refers to data from other sections.
+		\item \textbf{.debug\_loc} - Lists with locations of variables which can be found in \textit{DW\_AT\_location} attribute
+		\item \textbf{.debug\_frame} - Informations about stack frame of called functions
+	\end{itemize}
+	Let us mention some \textit{DIE} nodes:
+	\begin{itemize}
+		\item \textbf{DW\_TAG\_compile\_unit} - node which represents single compilation unit
+		\item \textbf{DW\_TAG\_subprogram} - node which represents subroutine or function
+		\item \textbf{DW\_TAG\_formal\_parameter} - function parameter
+	\end{itemize}
+	and some \textit{DIE} attributes:
+	\begin{itemize}
+		\item \textbf{DW\_AT\_name} - name of variable, function, or parameter
+		\item \textbf{DW\_AT\_type} - type of a variable, function or parameter
+		\item \textbf{DW\_AT\_decl*} - location (file, line, column) where variable or function has been declared
+		\item \textbf{DW\_AT\_low\_pc} - address of first instruction of procedure or address to jump to after procedure returns
+		\item \textbf{DW\_AT\_location} - location of variable or parameter. May be single entry or list of locations.
+	\end{itemize}
+
+	In order to read contents of specific debug section, \textit{llvm-dwarfdump-10} from \textit{clang} module or \textit{objdump} from \textit{gnu binutils} module may be used.
+
+\subsection *{Technical terms}
 \begin{itemize}
 	\item \textbf{Location Description.} Debugging information must provide consumers a way to find the location of program
 	variables, determine the bounds of dynamic arrays and strings, and possibly to find the
@@ -1411,18 +1436,195 @@ Since $value\_as\_address$ breakpoint was hit even before \textit{no-main} execu
 	techniques, debugging information must be able to describe the location of an object
 	whose location changes over the object’s lifetime. Information about the location of program objects is provided by location descriptions.
 	\item \textbf{CFA (Canonical Frame Address)} is address of caller function's stack frame just before the callee has been called.
+	For instance, on Intel x84\_64 architecture, we know that there are $rbp$ and $rsp$ registers pointing to stack base (beginning) and stack top, respectively.
+	CFA there would be content of current $rbp$ plus 16 bytes, assuming that stack is full descending. Explanation from where these 16 bytes came from follows:
+	\begin{minted}{bash}
+	call callee_func
+	# Address of next instruction after callee_func returns is
+	# implicitly pushed onto stack (8 bytes) in order for program
+	# counter register (rip aka pc) to be able to continue executing
+	# after callee_func returns
+	
+	# callee_func prologue
+	enter n, 0
+	
+	# Previous line is equal to the following three
+	# push rbp - another 8 bytes onto stack giving 8 + 8 = 16 bytes in total
+	# mov rbp, rsp
+	# sub rsp, n - where n means 'n bytes for local variables'
+	 		   
+	# Asembly instructions of callee_func and epilogue 
+	# when callee_func returns to its caller
+	\end{minted}
+	Previous code snippet may be useful to realize why output of \textit{llvm-dwarfdump-10} has 16 bytes offset when it prints location lists of variables and function parameters. 
 	
 \end{itemize}
-\section *{Common data types}
+\subsection *{Common data types}
 \begin{itemize}
-	\item \textbf{struct frame\_info} is a structure which describes stack frame. 
-	\item \textbf{struct value} defines the type of a value.
-	\item \textbf{gdb\_byte} unsigned char.
-\end{itemize}
+	\item \textbf{struct frame\_info} - a structure describing stack frame. 
+	\item \textbf{struct value} - defines the type of a value.
+	\item \textbf{gdb\_byte} - unsigned char.
+	\item \textbf{struct gdbarch} - representation of architecture on which executable is being run
+	\item \textbf{struct symtab} - header (.h, .hpp) or source (.c, .cpp etc.) file	
+	\item \textbf{struct linetable\_entry} - stores (line number, program counter address) pairs. Has additional flags that indicate whether this $pc$ data is a good place for placing breakpoint.
+	\item \textbf{struct linetable} - array of \textit{struct linetable\_entry} values, which is bound to every header and source file i.e. \textit{struct symtab} objects.
+	\item \textbf{struct objfile} - object file (usually .o)
+	\item \textbf{struct compunit\_symtab} - compilation unit
+	\item \textbf{struct block} - block of memory containing symbol information
+	\item \textbf{struct blockvector} - vector of \textit{blocks}
+	\item \textbf{struct general\_symbol\_info} - structure containing data common to all symbol types
+	\item \textbf{struct minimal\_symbol\_info} - extends \textit{general\_symbol\_info} and holds information about symbols
+	which aren't neccessary compiled with debug informations. That means,
+	even if a executable hasn't been compiled with debugging information, this
+	struct holds some useful data.
+	
 
-\section *{Functions}
+\end{itemize}
+Note difference between \textit{symtab}, \textit{objfile} and \textit{compilation unit}.
+\textit{struct symtab} corresponds to single file (usually .h or .cpp).
+\textit{struct compunit\_symtab} corresponds to compilation unit while
+\textit{struct objfile} corresponds to object file, which is product of compiling compilation unit, before linking begins. Interestingly, more object files can be combined into one e.g. by using \textit{ld} linker: 
+\begin{minted}{bash}
+ld -relocatable a.o b.o -o c.o
+\end{minted}
+and then, on environments that support standard UNIX magic numbers, \textit{c.o} would have value 'OMAGIC' (magic number is number in the very beginning of every file which is used for file associations similarly how Windows uses file extensions) which declares \textit{c.o} as \underline{partially linked file}. Further usage of newly created \textit{c.o} is equal as with any other object file.
+Having that said, single object file (\textit{struct objfile}) may have multiple compilation units (\textit{struct compunit\_symtab} objects). That's the reason why \textit{struct objfile} has \textit{list of compunits} attribute, but not just single \textit{compunit} attribute.
+Also, \textit{struct compunit\_symtab} contains debugging information in specific format (stabs, dwarf, coff etc.) and symbol tables a.k.a. blockvectors. 
+
+GDB typically reads symbols twice - first is an initial scan which just
+reads 'partial symbols'; these are partial information for the
+static/global symbols in a symbol file.
+Afterwards, when symbol is really needed, say \textit{print \$var} called, \textit{lookup\_symbol} function from \textit{struct objfile} invokes and symbols are expanded to the entire compilation unit.
+Symtabs objects which share compilation unit form linked list (\textit{next} attribute) with convention that main.c symtab is the head node.
+In the same way are connected \textit{struct compunit\_symtab} objects in the same \textit{struct objfile}. 
+\subsection *{Functions}
 \inputminted{c}{important_gdb_functions.c}	
 
+What information should debugger know if we invoke \textit{list} command, knowing that it prints out line numbers and source file code snippet?
+\begin{minted}{bash}
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.1) 9.2
+Reading symbols from /home/syrmia/builds/gdb/bin/gdb...
+
+# Put a breakpoint on function which is called to access .debug_line section
+b (gdb) b get_debug_line_section
+Breakpoint 1 at 0x26d000: file ../../gdb/dwarf2/read.c, line 19760.
+
+# and on a function which returns file and line number for a given address (pc)
+(gdb) b find_pc_sect_line
+Breakpoint 2 at 0x4b1fa0: file ../../gdb/symtab.c, line 3110.
+(gdb) run test
+Starting program: /home/syrmia/builds/gdb/bin/gdb test
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[Detaching after vfork from child process 164341]
+
+# We are now in gdb-debug. Let's see source code of debugged program (test)
+GNU gdb (GDB) 13.0.50.20220815-git
+Reading symbols from test...
+(gdb) list
+
+Thread 1 "gdb" hit Breakpoint 1, get_debug_line_section (cu=0x555556093190)
+at ../../gdb/dwarf2/read.c:19760
+19760	  if (cu->dwo_unit && cu->per_cu->is_debug_types)
+
+# In order to print out line numbers of source file, we need to access 
+# .debug_line section, which is performed by get_debug_line_section
+
+# We also note that breakpoint hasn't been hit when we said 'run' but only
+# when we explicitly asked for 'list' output, which means during initial 
+# (partial) symbol reading (run command), .debug_line section hasn't been 
+# touched.
+(gdb) bt
+#0  get_debug_line_section (cu=0x555556093190) at 
+../../gdb/dwarf2/read.c:19760
+#1  0x00005555557c1db9 in dwarf_decode_line_header (sect_off=(unknown: 0), 
+cu=0x555556093190, 
+comp_dir=0x55555618251d "/home/syrmia/test") at 
+../../gdb/dwarf2/read.c:19791
+#2  0x00005555557d64c4 in handle_DW_AT_stmt_list (die=0x5555561eda40, 
+cu=0x555556093190, fnd=..., 
+lowpc=4224) at ../../gdb/dwarf2/file-and-dir.h:66
+#3  0x00005555557eb11e in read_file_scope (cu=0x555556093190, 
+die=0x5555561eda40)
+at ../../gdb/dwarf2/read.c:9626
+#4  process_die (die=0x5555561eda40, cu=0x555556093190) at 
+../../gdb/dwarf2/read.c:8635
+#5  0x00005555557eee62 in process_full_comp_unit 
+(pretend_language=<optimized out>, cu=0x555556093190)
+at ../../gdb/dwarf2/read.c:8404
+#6  process_queue (per_objfile=0x555556033980) at ../../gdb/dwarf2/read.c:7650
+#7  dw2_do_instantiate_symtab (skip_partial=<optimized out>, 
+per_objfile=0x555556033980, 
+per_cu=0x5555561bbd20) at ../../gdb/dwarf2/read.c:2063
+#8  dw2_instantiate_symtab (per_cu=0x5555561bbd20, per_objfile=0x555556033980, 
+skip_partial=<optimized out>) at ../../gdb/dwarf2/read.c:2085
+#9  0x00005555557ef4fc in dw2_expand_symtabs_matching_one(dwarf2_per_cu_data *,
+dwarf2_per_objfile *, gdb::function_view<bool(compunit_symtab*)>) 
+(per_cu=<optimized out>, per_objfile=<optimized out>, 
+expansion_notify=..., file_matcher=...) at ../../gdb/dwarf2/read.c:3976
+#10 0x00005555557f0733 in cooked_index_functions::expand_symtabs_matching
+(objfile*, gdb::function_view<bool (char const*, bool)>, 
+lookup_name_info const*, gdb::function_view<bool (char const*)>, 
+gdb::function_view<bool (compunit_symtab*)>, 
+enum_flags<block_search_flag_values>, domain_enum, search_domain) (
+this=<optimized out>, objfile=<optimized out>, file_matcher=...,
+lookup_name=<optimized out>, 
+symbol_matcher=..., expansion_notify=..., search_flags=..., 
+domain=VAR_DOMAIN, kind=ALL_DOMAIN)
+at ../../gdb/dwarf2/read.c:18739
+#11 0x00005555559ed4d8 in objfile::lookup_symbol (this=0x5555561bc030, 
+kind=<optimized out>, name=<optimized out>, domain=<optimized out>) at 
+../../gdb/../gdbsupport/function-view.h:298
+# .
+# .
+# .
+(gdb) c
+Continuing.
+
+Thread 1 "gdb" hit Breakpoint 2, find_pc_sect_line (pc=4224, 
+section=0x5555561b1548, notcurrent=0)
+at ../../gdb/symtab.c:3110
+3110	{
+(gdb) bt
+#0  find_pc_sect_line (pc=4224, section=0x5555561b1548, notcurrent=0) 
+at ../../gdb/symtab.c:3110
+#1  0x0000555555a06fbd in find_function_start_sal_1 (func_addr=4224, 
+section=0x5555561b1548, 
+funfirstline=<optimized out>) at ../../gdb/symtab.c:3682
+#2  0x0000555555a071bb in find_function_start_sal (sym=sym@entry=0x5555561f6750, 
+funfirstline=funfirstline@entry=true) at ../../gdb/block.h:112
+#3  0x00005555559d3652 in select_source_symtab (s=<optimized out>) at 
+../../gdb/source.c:329
+#4  0x000055555573041d in list_command (arg=<optimized out>, 
+from_tty=<optimized out>)
+at ../../gdb/cli/cli-cmds.c:1185
+#5  0x0000555555733f45 in cmd_func (cmd=<optimized out>, args=<optimized out>, 
+from_tty=<optimized out>)
+at ../../gdb/cli/cli-decode.c:2516
+#6  0x0000555555a3c257 in execute_command (p=<optimized out>, 
+p@entry=0x555555fae230 "list", from_tty=1)
+at ../../gdb/top.c:699
+#7  0x000055555580c965 in command_handler (command=0x555555fae230 "list") at 
+../../gdb/event-top.c:598
+#8  0x000055555580cd51 in command_line_handler (rl=...) at 
+../../gdb/event-top.c:842
+# .
+# .
+# .
+(gdb) c
+Continuing.
+1	#include <stdio.h>
+2	
+3	int main()
+4	{
+5		printf("Address of main is %p\n", main);
+6		int a = 5;
+7		int *pa = &a;
+8		printf("'a' is at address '%p'.\n'a' has value '%d'\n", pa, *pa);
+9	
+10		return 0;
+
+\end{minted}
 
 \end{document}
 
