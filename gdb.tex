@@ -7,7 +7,7 @@
 
 \chapter *{Debugging of GDB debugger}
 \section *{Goal}
-Compile debug version of GDB ($-g$ option) and use system $gdb$ to debug compiled one. In case system $gdb$ isn't present, either compile release version (without $-g$ option) of $gdb$ or simly install it from software center. Debug version should run $test$ program whose source code is:
+Compile debug version of GDB (\textit{-g} option) and use system $gdb$ to debug compiled one. In case system $gdb$ isn't present, either compile release version (without \textit{-g} option) of $gdb$ or simly install it from software center. Debug version should run $test$ program whose source code is:
 \begin{minted}{c}
 #include <stdio.h>
    
@@ -25,7 +25,7 @@ Compile $test$ using:
 gcc -g test.c -o test
 \end{minted}
 \section *{Compilation of GDB}
-Let's suppose you want to build $gdb$ in $\$HOME/builds$ folder. 
+Let's suppose you want to build $gdb$ in \textit{\$HOME/builds} folder. 
 \begin{minted}{bash}
 cd "$HOME"
 # The following two lines should be uncommented just in case you haven't 
@@ -55,7 +55,7 @@ mkdir build && cd build
 make -j$(nproc) >build.log
 echo $?
 \end{minted}
-Repeat above procedure until you get $0$ exit status. After you succeed, in $build/gdb$ will be present $gdb$ executable. Now, before you install it inside aforementioned $\$HOME/builds$ directory, check whether you got $debug$ or $release$ version of $gdb$.
+Repeat above procedure until you get $0$ exit status. After you succeed, in $build/gdb$ will be present $gdb$ executable. Now, before you install it inside aforementioned \textit{\$HOME/builds} directory, check whether you got $debug$ or $release$ version of $gdb$.
 \section *{Debug / Release}
 Difference between $debug$ and $release$ version of executable is that $debug$ version retains useful information for debugger, but $release$ executable is optimized by compiler and much of these information is stripped. That being said, if you want to debug your program by some debugger, you should always compile it as $debug$ version.
 To find out if executable is $debug$ or $release$ version, you may use one of the following commands:
@@ -76,7 +76,7 @@ After build process completes, $gdb$ can be installed:
 cd "$HOME/binutils-gdb/build" # set current working dir to build folder
 make install                  # install compiled gdb to specified --prefix folder
 \end{minted}
-Note that we didn't use $sudo make install$ because we don't need admin privilleges to acces subdir of $\$HOME$ folder. Another two reasons to use $--prefix$ option are to prevent conflict with system $gdb$ in folders like $/usr/bin$, $/usr/local/bin$, $/bin$... and conflicts with other users on the same computer.
+Note that we didn't use \textit{sudo make install} because we don't need admin privilleges to acces subdir of \textit{\$HOME} folder. Another two reasons to use \textit{--prefix} option are to prevent conflict with system $gdb$ in folders like $/usr/bin$, $/usr/local/bin$, $/bin$... and conflicts with other users on the same computer.
 
 \section *{Running GDB by another GDB instance}
 Let  \textit{/usr/bin/gdb} be path to system $gdb$ - we will call it \textit{gdb-release}. Let $\$HOME/builds/gdb/bin/gdb$ be path to just built $gdb$ - we will call it \textit{gdb-debug}.
@@ -171,7 +171,7 @@ This means we are now in \textit{gdb-release} on line $value\_as\_address$ which
     at ../../gdb/gdb.c:32
 \end{minted}
 What we knew until now is that content of pointer is address. But, do we need to perform some operations (e.g. shift) on these bytes in order to get usable address for specific architecture?
-Answer is \textbf{yes}, as can be read in 'Pointers Are Not Always Adresses' chapter of \href{https://wwwcdf.pd.infn.it/localdoc/gdbint.pdf}{\underline{this}} document. That is purpose of $value\_as\_address$ function. Continuing program execution:
+Answer is \textbf{yes}, as can be read in 'Pointers Are Not Always Adresses' chapter of \href{https://wwwcdf.pd.infn.it/localdoc/gdbint.pdf}{\underline{this}} document. That is purpose of $value\_as\_address$ function. There is also a concept of \textit{tagged pointer} which except address can store additional data. Continuing program execution:
 \begin{minted}{bash}
 (gdb) continue
 Continuing.
@@ -1403,7 +1403,7 @@ Hello from my_fun!
 Since $value\_as\_address$ breakpoint was hit even before \textit{no-main} executable started ($\_start$ breakpoint), we can conclude that $gdb$ performs some preparations before debugged program commences its execution. As we already said, parameter $value$ passed to $value\_as\_address$ isn't address of $\_start$ nor $my\_fun$ function.
 
 \chapter *{DWARF Functions in GDB}
-	Most common debugging formats are \textit{COFF}, \textit{STABS} and \textit{DWARF}, which will be in our focus. \textit{DWARF} is standardized debugging data format which uses data structure called \textbf{DIE}(Debugging Information Entry), noted as \textit{DW\_TAG} and organized in a tree structure.  Each \textit{DIE} has attributes which begin with \textit{DW\_AT} (\textit{DW\_AT\_name}, \textit{DW\_AT\_type}, \textit{DW\_AT\_declaration} etc.). All debug informations are divided into sections, of which most important are:
+	Most common debugging formats are \textit{COFF}, \textit{STABS} and \textit{DWARF}, which will be in our focus. \textit{DWARF} is standardized debugging data format which uses data structure called \textbf{DIE} (Debugging Information Entry), noted as \textit{DW\_TAG} and organized in a tree structure.  Each \textit{DIE} has attributes which begin with \textit{DW\_AT} (\textit{DW\_AT\_name}, \textit{DW\_AT\_type}, \textit{DW\_AT\_declaration} etc.). All debug informations are divided into sections, of which most important are:
 	\begin{itemize}
 		\item \textbf{.debug\_line} - contains information about line numbers from source code
 		\item \textbf{.debug\_info} - most important section containing tree structure of debug informations. Refers to data from other sections.
@@ -1429,32 +1429,92 @@ Since $value\_as\_address$ breakpoint was hit even before \textit{no-main} execu
 
 \subsection *{Technical terms}
 \begin{itemize}
-	\item \textbf{Location Description.} Debugging information must provide consumers a way to find the location of program
-	variables, determine the bounds of dynamic arrays and strings, and possibly to find the
-	base address of a subroutine’s stack frame or the return address of a subroutine.
-	Furthermore, to meet the needs of recent computer architectures and optimization
-	techniques, debugging information must be able to describe the location of an object
-	whose location changes over the object’s lifetime. Information about the location of program objects is provided by location descriptions.
-	\item \textbf{CFA (Canonical Frame Address)} is address of caller function's stack frame just before the callee has been called.
+	\item \textbf{DWARF expression} is stream of operations where each operation consists of single opcode and arguments. Number of arguments is implied from opcode. It describes how to compute a value or specify a location. 
+	
+	\item \textbf{Location Description.} Debugging information must provide consumers a way to find the location of program variables, determine the bounds of dynamic arrays and strings, and possibly to find the base address of a subroutine’s stack frame or the return address of a subroutine. Furthermore, to meet the needs of recent computer architectures and optimization techniques, debugging information must be able to describe the location of an object whose location changes over the object’s lifetime. Information about the location of program objects is provided by location descriptions.
+	Location description (\textit{DW\_AT\_location attribute}) can be either in form of: 
+	\begin{enumerate}
+		\item \textbf{single location description}, when object doesn't move during its lifetime or 
+		\item \textbf{location list}, which is used to describe object that has a limited lifetime or changes location as program executes
+	\end{enumerate}
+
+	Speaking of GDB source code, functions to evaluate \textit{location description} can be found in \textit{loc.c} file and those for evaluation of \textit{DWARF expressions} are in \textit{expr.c}.  \textit{dwarf2\_evaluate\_loc\_desc\_full} is the key function to compute location description while \textit{dwarf\_expr\_context::execute\_stack\_op} is the key function to evaluate \textit{DWARF expression}, like stack trace in the following code shows. Note also that, in order for \textit{dwarf2\_evaluate\_loc\_desc\_full} to finish, \textit{DWARF expression} trough \textit{dwarf\_expr\_context::execute\_stack\_op} must be evaluated first.
+	
+	\begin{minted}[breaklines]{bash}
+(bash) gdb $HOME/builds/gdb/bin/gdb	
+(gdb) b dwarf2_evaluate_loc_desc_full
+(gdb) run test
+(gdb) b 8
+(gdb) print pa
+Thread 1 "gdb" hit Breakpoint 1, dwarf2_evaluate_loc_desc_full (type=0x5555561f6900, frame=0x55555600eb90, ...
+(gdb) step
+# repeated 'step' a couple of times...
+(gdb) bt
+#0  gdbarch_byte_order (gdbarch=gdbarch@entry=0x5555561a7600) 
+at ../../gdb/gdbarch.c:1458
+#1  0x00005555557a3f41 in dwarf_expr_context::execute_stack_op 
+(this=0x7fffffffd7f0, 
+op_ptr=0x5555561f85b9 "\221d\237", op_end=0x5555561f85bc "") at  
+../../gdb/dwarf2/expr.c:1487
+#2  0x00005555557a5c98 in dwarf_expr_context::eval (this=0x7fffffffd7f0, 
+addr=<optimized out>, len=<optimized out>) at ../../gdb/dwarf2/expr.c:1238
+#3  0x00005555557a5f46 in dwarf_expr_context::evaluate 
+(this=0x7fffffffd7f0, addr=<optimized out>, len=<optimized out>,
+as_lval=<optimized out>, per_cu=<optimized out>, frame=<optimized out>, 
+addr_info=0x0, type=0x5555561f6900, subobj_type=0x5555561f6900, 
+subobj_offset=0) at ../../gdb/dwarf2/expr.c:1077
+#4  0x00005555557b8716 in dwarf2_evaluate_loc_desc_full (type=0x5555561f6900, 
+frame=0x55555600eb90, data=0x5555561f85b9 "\221d\237", size=3, 
+per_cu=0x5555561bbd80, per_objfile=<optimized out>, 
+subobj_type=0x5555561f6900, subobj_byte_offset=0, as_lval=true) 
+at ../../gdb/dwarf2/loc.c:1519
+#5  0x00005555557b901b in dwarf2_evaluate_loc_desc (as_lval=true, 
+per_objfile=<optimized out>, per_cu=<optimized out>, size=<optimized out>,
+data=<optimized out>, frame=0x55555600eb90, type=<optimized out>) 
+at ../../gdb/dwarf2/loc.c:1563
+#6  loclist_read_variable (symbol=0x5555561f68b0, frame=0x55555600eb90) 
+at ../../gdb/dwarf2/loc.c:3890
+#7  0x000055555582593f in language_defn::read_var_value 
+(this=<optimized out>, var=0x5555561f68b0, 
+var_block=0x5555561f8b30, frame=0x55555600eb90) 
+at ../../gdb/symtab.h:1232
+#8  0x0000555555806b47 in evaluate_var_value (noside=EVAL_NORMAL, 
+blk=<optimized out>, var=0x5555561f68b0) at ../../gdb/eval.c:559
+#9  0x0000555555805e92 in expression::evaluate (this=0x555556221160, 
+expect_type=0x0, noside=EVAL_NORMAL)
+at /usr/include/c++/9/bits/unique_ptr.h:360
+#10 0x0000555555927fc0 in process_print_command_args (args=<optimized out>,
+print_opts=0x7fffffffda60, voidprint=<optimized out>) at  
+/usr/include/c++/9/bits/unique_ptr.h:360
+#11 0x00005555559287eb in print_command_1 (args=<optimized out>, voidprint=1) 
+at ../../gdb/printcmd.c:1320
+.
+.
+.
+	\end{minted}
+	
+	
+	\item \textbf{CFA (Canonical Frame Address)} is address of caller function's stack frame just before the callee has been called. \\ \\
 	For instance, on Intel x84\_64 architecture, we know that there are $rbp$ and $rsp$ registers pointing to stack base (beginning) and stack top, respectively.
-	CFA there would be content of current $rbp$ plus 16 bytes, assuming that stack is full descending. Explanation from where these 16 bytes came from follows:
+	CFA there would be content of current $rbp$ plus 16 bytes, assuming that stack is full descending. Explanation where from these 16 bytes came from follows:
 	\begin{minted}{bash}
-	call callee_func
-	# Address of next instruction after callee_func returns is
-	# implicitly pushed onto stack (8 bytes) in order for program
-	# counter register (rip aka pc) to be able to continue executing
-	# after callee_func returns
+call callee_func
+# Address of next instruction after callee_func returns is
+# implicitly pushed onto stack (8 bytes) in order for program
+# counter register (rip aka pc) to be able to continue execution
+# after callee_func returns
 	
-	# callee_func prologue
-	enter n, 0
+# callee_func prologue
+enter n, 0
 	
-	# Previous line is equal to the following three
-	# push rbp - another 8 bytes onto stack giving 8 + 8 = 16 bytes in total
-	# mov rbp, rsp
-	# sub rsp, n - where n means 'n bytes for local variables'
+# Previous line is equal to the following three
+# push rbp - another 8 bytes onto stack giving 8 + 8 = 16 bytes in total
+# mov rbp, rsp
+# sub rsp, n - where n means 'n bytes for local variables'
 	 		   
-	# Asembly instructions of callee_func and epilogue 
-	# when callee_func returns to its caller
+# Consider this and the following two lines to be assembly 
+# instructions of callee_func and epilogue, when 
+# callee_func returns to its caller
 	\end{minted}
 	Previous code snippet may be useful to realize why output of \textit{llvm-dwarfdump-10} has 16 bytes offset when it prints location lists of variables and function parameters. 
 	
@@ -1489,17 +1549,18 @@ ld -relocatable a.o b.o -o c.o
 \end{minted}
 and then, on environments that support standard UNIX magic numbers, \textit{c.o} would have value 'OMAGIC' (magic number is number in the very beginning of every file which is used for file associations similarly how Windows uses file extensions) which declares \textit{c.o} as \underline{partially linked file}. Further usage of newly created \textit{c.o} is equal as with any other object file.
 Having that said, single object file (\textit{struct objfile}) may have multiple compilation units (\textit{struct compunit\_symtab} objects). That's the reason why \textit{struct objfile} has \textit{list of compunits} attribute, but not just single \textit{compunit} attribute.
-Also, \textit{struct compunit\_symtab} contains debugging information in specific format (stabs, dwarf, coff etc.) and symbol tables a.k.a. blockvectors. 
-
+Also, \textit{struct compunit\_symtab} contains debugging information in specific format (stabs, dwarf, coff etc.) and symbol tables a.k.a. blockvectors. \\ \\
+Symtabs objects which share compilation unit form linked list (\textit{next} attribute) with convention that main.c symtab is the head node.
+In the same way are connected \textit{struct compunit\_symtab} objects which refer to the same \textit{struct objfile}.
+\subsection *{Some Functions}
+\inputminted{c}{important_gdb_functions.c}
+	
+\subsection *{Reading of Symbols}
 GDB typically reads symbols twice - first is an initial scan which just
 reads 'partial symbols'; these are partial information for the
 static/global symbols in a symbol file.
-Afterwards, when symbol is really needed, say \textit{print \$var} called, \textit{lookup\_symbol} function from \textit{struct objfile} invokes and symbols are expanded to the entire compilation unit.
-Symtabs objects which share compilation unit form linked list (\textit{next} attribute) with convention that main.c symtab is the head node.
-In the same way are connected \textit{struct compunit\_symtab} objects in the same \textit{struct objfile}. 
-\subsection *{Functions}
-\inputminted{c}{important_gdb_functions.c}	
-
+Afterwards, when symbol is really needed, say \textit{print \$var} called, \textit{lookup\_symbol} function from \textit{struct objfile} invokes and symbols are expanded to the entire compilation unit. \\ \\
+When does GDB read debug informations?
 What information should debugger know if we invoke \textit{list} command, knowing that it prints out line numbers and source file code snippet?
 \begin{minted}{bash}
 GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.1) 9.2
@@ -1528,12 +1589,8 @@ at ../../gdb/dwarf2/read.c:19760
 19760	  if (cu->dwo_unit && cu->per_cu->is_debug_types)
 
 # In order to print out line numbers of source file, we need to access 
-# .debug_line section, which is performed by get_debug_line_section
+# .debug_line section, which is performed by function get_debug_line_section
 
-# We also note that breakpoint hasn't been hit when we said 'run' but only
-# when we explicitly asked for 'list' output, which means during initial 
-# (partial) symbol reading (run command), .debug_line section hasn't been 
-# touched.
 (gdb) bt
 #0  get_debug_line_section (cu=0x555556093190) at 
 ../../gdb/dwarf2/read.c:19760
@@ -1623,8 +1680,20 @@ Continuing.
 8		printf("'a' is at address '%p'.\n'a' has value '%d'\n", pa, *pa);
 9	
 10		return 0;
-
+(gdb) list 5
+1	#include <stdio.h>
+2	
+3	int main()
+4	{
+5		printf("Address of main is %p\n", main);
+6		int a = 5;
+7		int *pa = &a;
+8		printf("'a' is at address '%p'.\n'a' has value '%d'\n", pa, *pa);
+9	
+10		return 0;
+} ...
 \end{minted}
+Note that both \textit{get\_debug\_line\_section} and \textit{find\_find\_pc\_sect\_line} breakpoints were hit only one time - on the first execution of \textit{list} because \textit{GDB} caches already read symbols.
 
 \end{document}
 
