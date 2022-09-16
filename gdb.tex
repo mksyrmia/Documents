@@ -1431,6 +1431,8 @@ Since $value\_as\_address$ breakpoint was hit even before \textit{no-main} execu
 \begin{itemize}
 	\item \textbf{DWARF expression} is stream of operations where each operation consists of single opcode and arguments. Number of arguments is implied from opcode. It describes how to compute a value or specify a location. 
 	
+	\item \textbf{Binary File Descriptor (BFD) Library} is part of \textit{GNU} project and provides compatibility between different object file formats. It's capable to read data from core dump and hence is useful in debugging programs for embedded systems. Since it's used by more \textit{GNU} tools like \textit{gas}, \textit{gld} and \textit{gdb}, it's source code is in \textit{binutils} package.
+	
 	\item \textbf{Location Description.} Debugging information must provide consumers a way to find the location of program variables, determine the bounds of dynamic arrays and strings, and possibly to find the base address of a subroutine’s stack frame or the return address of a subroutine. Furthermore, to meet the needs of recent computer architectures and optimization techniques, debugging information must be able to describe the location of an object whose location changes over the object’s lifetime. Information about the location of program objects is provided by location descriptions.
 	Location description (\textit{DW\_AT\_location attribute}) can be either in form of: 
 	\begin{enumerate}
@@ -1550,8 +1552,9 @@ ld -relocatable a.o b.o -o c.o
 and then, on environments that support standard UNIX magic numbers, \textit{c.o} would have value 'OMAGIC' (magic number is number in the very beginning of every file which is used for file associations similarly how Windows uses file extensions) which declares \textit{c.o} as \underline{partially linked file}. Further usage of newly created \textit{c.o} is equal as with any other object file.
 Having that said, single object file (\textit{struct objfile}) may have multiple compilation units (\textit{struct compunit\_symtab} objects). That's the reason why \textit{struct objfile} has \textit{list of compunits} attribute, but not just single \textit{compunit} attribute.
 Also, \textit{struct compunit\_symtab} contains debugging information in specific format (stabs, dwarf, coff etc.) and symbol tables a.k.a. blockvectors. \\ \\
-Symtabs objects which share compilation unit form linked list (\textit{next} attribute) with convention that main.c symtab is the head node.
+Symtab objects which share compilation unit form linked list (\textit{next} attribute) with convention that main.c symtab is the head node.
 In the same way are connected \textit{struct compunit\_symtab} objects which refer to the same \textit{struct objfile}.
+Object files (\textit{struct objfile} objects) which share the same \textit{BFD} store common data into \textit{struct objfile\_per\_bfd\_storage} object.
 \subsection *{Some Functions}
 \inputminted{c}{important_gdb_functions.c}
 	
@@ -1693,7 +1696,7 @@ Continuing.
 10		return 0;
 } ...
 \end{minted}
-Note that both \textit{get\_debug\_line\_section} and \textit{find\_find\_pc\_sect\_line} breakpoints were hit only one time - on the first execution of \textit{list} because \textit{GDB} caches already read symbols.
+We saw that both \textit{get\_debug\_line\_section} and \textit{find\_find\_pc\_sect\_line} breakpoints, in that order, were hit only one time - on the first execution of \textit{list} because \textit{GDB} caches already read symbols.
 
 \end{document}
 
